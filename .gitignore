@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+.env.*.local
+*.log
+*.tsbuildinfo
+*.backup*
+fix-*.cjs
+fix_tsx.py
+.DS_Store
