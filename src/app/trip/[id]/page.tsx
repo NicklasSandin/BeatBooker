@@ -1,9 +1,11 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { ArrowLeft, Loader2, AlertCircle, Home, Building, Star, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +17,20 @@ import { HotelsTab } from "@/components/trip/HotelsTab";
 import { ThePickTab } from "@/components/trip/ThePickTab";
 import { ExportButton } from "@/components/trip/ExportButton";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { matchLandmark, wikimediaOriginal } from "@/lib/landmarks";
+
+const statsContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.1 } },
+};
+const statItem = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+};
+const fadeIn = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+};
 
 // Leaflet touches `window` at module-eval time, so the map must never render on the server.
 const TripMap = dynamic(() => import("@/components/map/TripMap"), {
@@ -62,6 +78,7 @@ function ErrorState({
 
 export default function TripResultsPage() {
   const params = useParams<{ id: string }>();
+  const [bannerImageFailed, setBannerImageFailed] = useState(false);
   const trips = useTripStore((state) => state.trips);
   const hasHydrated = useSyncExternalStore(
     (onStoreChange) =>
@@ -162,94 +179,133 @@ export default function TripResultsPage() {
     );
   }
 
+  const landmark = matchLandmark(trip.formData.location);
+
   return (
     <div className="container py-8">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
+        {/* Destination banner */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="relative mb-6 overflow-hidden rounded-2xl"
+        >
+          <div className="relative h-48 w-full sm:h-56 bg-gradient-to-br from-primary to-accent">
+            {landmark && !bannerImageFailed && (
+              <Image
+                src={wikimediaOriginal(landmark.imageUrl)}
+                alt={landmark.title}
+                fill
+                priority
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 768px"
+                onError={() => setBannerImageFailed(true)}
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10" />
+          </div>
+          <div className="absolute inset-0 flex flex-col justify-between p-4 sm:p-6">
             <Link href="/trip/new">
-              <Button variant="ghost" size="icon">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-white/10 text-white backdrop-blur hover:bg-white/20 hover:text-white"
+              >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold">{trip.formData.location}</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-2xl font-bold text-white drop-shadow sm:text-3xl">
+                {trip.formData.location}
+              </h1>
+              <p className="text-sm text-white/85 sm:text-base">
                 {formatDate(trip.formData.startDate)} - {formatDate(trip.formData.endDate)} &middot;{" "}
                 {trip.formData.travelers} traveler{trip.formData.travelers > 1 ? "s" : ""} &middot;{" "}
                 Budget: {formatCurrency(trip.formData.maxBudget)}/night
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <ExportButton trip={trip} />
-          </div>
+        </motion.div>
+
+        <div className="mb-6 flex justify-end">
+          <ExportButton trip={trip} />
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Home className="h-4 w-4 text-primary" />
-                Best Rental
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {trip.rentals ? (
-                <div>
-                  <p className="text-2xl font-bold">
-                    {formatCurrency(trip.rentals.cheapestWeek.totalPrice)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Lowest stay total</p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No rental data</p>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Building className="h-4 w-4 text-primary" />
-                Best Hotel Deal
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {trip.hotels && trip.hotels.hotels.length > 0 ? (
-                <div>
-                  <p className="text-2xl font-bold">
-                    {formatCurrency(trip.hotels.summary.totalSavings)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Total potential savings</p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No hotel data</p>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Star className="h-4 w-4 text-primary" />
-                Top Pick Score
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {trip.thePick && trip.thePick.topPicks.length > 0 ? (
-                <div>
-                  <p className="text-2xl font-bold">
-                    {trip.thePick.topPicks[0].score.toFixed(1)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Best value score</p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No data available</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <motion.div
+          variants={statsContainer}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
+        >
+          <motion.div variants={statItem}>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Home className="h-4 w-4 text-primary" />
+                  Best Rental
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {trip.rentals ? (
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {formatCurrency(trip.rentals.cheapestWeek.totalPrice)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Lowest stay total</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No rental data</p>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+          <motion.div variants={statItem}>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Building className="h-4 w-4 text-primary" />
+                  Best Hotel Deal
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {trip.hotels && trip.hotels.hotels.length > 0 ? (
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {formatCurrency(trip.hotels.summary.totalSavings)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Total potential savings</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No hotel data</p>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+          <motion.div variants={statItem}>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Star className="h-4 w-4 text-primary" />
+                  Top Pick Score
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {trip.thePick && trip.thePick.topPicks.length > 0 ? (
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {trip.thePick.topPicks[0].score.toFixed(1)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Best value score</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No data available</p>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </motion.div>
 
         {/* Results Tabs */}
         <Tabs defaultValue="rentals" className="w-full">
@@ -272,63 +328,71 @@ export default function TripResultsPage() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="rentals" className="mt-6">
-            {trip.rentals ? (
-              <RentalsTab rentals={trip.rentals} travelers={trip.formData.travelers} />
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-8">
-                  <Home className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground">No rental data available</p>
-                </CardContent>
-              </Card>
-            )}
+            <motion.div variants={fadeIn} initial="hidden" animate="show">
+              {trip.rentals ? (
+                <RentalsTab rentals={trip.rentals} travelers={trip.formData.travelers} />
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-8">
+                    <Home className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">No rental data available</p>
+                  </CardContent>
+                </Card>
+              )}
+            </motion.div>
           </TabsContent>
           <TabsContent value="hotels" className="mt-6">
-            {trip.hotels ? (
-              <HotelsTab hotels={trip.hotels} travelers={trip.formData.travelers} />
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-8">
-                  <Building className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground">No hotel data available</p>
-                </CardContent>
-              </Card>
-            )}
+            <motion.div variants={fadeIn} initial="hidden" animate="show">
+              {trip.hotels ? (
+                <HotelsTab hotels={trip.hotels} travelers={trip.formData.travelers} />
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-8">
+                    <Building className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">No hotel data available</p>
+                  </CardContent>
+                </Card>
+              )}
+            </motion.div>
           </TabsContent>
           <TabsContent value="thepick" className="mt-6">
-            {trip.thePick ? (
-              <ThePickTab thePick={trip.thePick} />
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-8">
-                  <Star className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground">No pick data available</p>
-                </CardContent>
-              </Card>
-            )}
+            <motion.div variants={fadeIn} initial="hidden" animate="show">
+              {trip.thePick ? (
+                <ThePickTab thePick={trip.thePick} />
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-8">
+                    <Star className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">No pick data available</p>
+                  </CardContent>
+                </Card>
+              )}
+            </motion.div>
           </TabsContent>
           <TabsContent value="map" className="mt-6">
-            {(() => {
-              const rentalListings = trip.rentals?.allListings ?? [];
-              const hotelOptions = trip.hotels?.hotels ?? [];
-              const mapCenter =
-                trip.formData.coordinates ??
-                rentalListings[0]?.coordinates ??
-                hotelOptions[0]?.coordinates;
+            <motion.div variants={fadeIn} initial="hidden" animate="show">
+              {(() => {
+                const rentalListings = trip.rentals?.allListings ?? [];
+                const hotelOptions = trip.hotels?.hotels ?? [];
+                const mapCenter =
+                  trip.formData.coordinates ??
+                  rentalListings[0]?.coordinates ??
+                  hotelOptions[0]?.coordinates;
 
-              if (!mapCenter || (rentalListings.length === 0 && hotelOptions.length === 0)) {
-                return (
-                  <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-8">
-                      <MapPin className="h-8 w-8 text-muted-foreground mb-2" />
-                      <p className="text-muted-foreground">No map data available</p>
-                    </CardContent>
-                  </Card>
-                );
-              }
+                if (!mapCenter || (rentalListings.length === 0 && hotelOptions.length === 0)) {
+                  return (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-8">
+                        <MapPin className="h-8 w-8 text-muted-foreground mb-2" />
+                        <p className="text-muted-foreground">No map data available</p>
+                      </CardContent>
+                    </Card>
+                  );
+                }
 
-              return <TripMap center={mapCenter} rentals={rentalListings} hotels={hotelOptions} />;
-            })()}
+                return <TripMap center={mapCenter} rentals={rentalListings} hotels={hotelOptions} />;
+              })()}
+            </motion.div>
           </TabsContent>
         </Tabs>
       </div>

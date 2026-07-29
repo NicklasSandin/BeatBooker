@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
+import { motion } from "framer-motion";
 import { Calendar, DollarSign, MapPin, Home, TrendingUp, TrendingDown, BedDouble } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +21,15 @@ interface RentalsTabProps {
   rentals: RentalAnalysis;
   travelers: number;
 }
+
+const listContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.06 } },
+};
+const listItem = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+};
 
 export function RentalsTab({ rentals, travelers }: RentalsTabProps) {
   const { cheapestWeek, priceRange, bestNeighborhoods, allListings } = rentals;
@@ -177,7 +188,12 @@ export function RentalsTab({ rentals, travelers }: RentalsTabProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <motion.div
+            variants={listContainer}
+            initial="hidden"
+            animate="show"
+            className="space-y-4"
+          >
             {filteredListings.length === 0 && (
               <p className="text-sm text-muted-foreground py-6 text-center">
                 No listings match this bed-size filter. Try a lower minimum.
@@ -186,58 +202,73 @@ export function RentalsTab({ rentals, travelers }: RentalsTabProps) {
             {filteredListings.map((listing) => {
               const warnings = bedWarnings(listing.beds, travelers);
               return (
-                <div
+                <motion.div
                   key={listing.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors"
+                  variants={listItem}
+                  whileHover={{ y: -2 }}
+                  className="flex flex-col sm:flex-row gap-4 p-4 rounded-lg border hover:border-primary/50 hover:shadow-md transition-[border-color,box-shadow]"
                 >
-                  <div className="space-y-1 mb-2 sm:mb-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{listing.title}</p>
-                      <Badge variant="outline" className="text-xs">
-                        {listing.platform}
-                      </Badge>
+                  {listing.imageUrl && (
+                    <div className="relative h-40 w-full shrink-0 overflow-hidden rounded-lg sm:h-24 sm:w-32">
+                      <Image
+                        src={listing.imageUrl}
+                        alt={listing.title}
+                        fill
+                        sizes="(max-width: 640px) 100vw, 128px"
+                        className="object-cover"
+                      />
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-                      <span>{listing.bedrooms} bed{listing.bedrooms > 1 ? "s" : ""}</span>
-                      <span>{listing.bathrooms} bath{listing.bathrooms > 1 ? "s" : ""}</span>
-                      <span>Up to {listing.maxGuests} guests</span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {listing.neighborhood}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <BedDouble className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>
-                        {describeBeds(listing.beds)}
-                        {listing.bedsEstimated ? " (estimated)" : ""}
-                      </span>
-                    </div>
-                    {warnings.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        {warnings.map((warning) => (
-                          <Badge key={warning} variant="warning" className="text-xs font-normal">
-                            {warning}
-                          </Badge>
-                        ))}
+                  )}
+                  <div className="flex flex-1 flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{listing.title}</p>
+                        <Badge variant="outline" className="text-xs">
+                          {listing.platform}
+                        </Badge>
                       </div>
-                    )}
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-yellow-500">★</span>
-                      <span>{listing.reviewScore.toFixed(1)}</span>
-                      <span className="text-muted-foreground">({listing.reviewCount} reviews)</span>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                        <span>{listing.bedrooms} bed{listing.bedrooms > 1 ? "s" : ""}</span>
+                        <span>{listing.bathrooms} bath{listing.bathrooms > 1 ? "s" : ""}</span>
+                        <span>Up to {listing.maxGuests} guests</span>
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {listing.neighborhood}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <BedDouble className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>
+                          {describeBeds(listing.beds)}
+                          {listing.bedsEstimated ? " (estimated)" : ""}
+                        </span>
+                      </div>
+                      {warnings.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {warnings.map((warning) => (
+                            <Badge key={warning} variant="warning" className="text-xs font-normal">
+                              {warning}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-yellow-500">★</span>
+                        <span>{listing.reviewScore.toFixed(1)}</span>
+                        <span className="text-muted-foreground">({listing.reviewCount} reviews)</span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-lg font-bold">{formatCurrency(listing.totalPrice, listing.currency)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatCurrency(listing.pricePerNight, listing.currency)}/night
+                      </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold">{formatCurrency(listing.totalPrice, listing.currency)}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatCurrency(listing.pricePerNight, listing.currency)}/night
-                    </p>
-                  </div>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         </CardContent>
       </Card>
     </div>

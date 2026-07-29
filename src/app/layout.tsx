@@ -30,7 +30,7 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body className="antialiased">
+      <body className="antialiased bg-background text-foreground">
         <ThemeProvider>
           <div className="relative flex min-h-screen flex-col">
             <Header />

@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import { motion } from "framer-motion";
 import { Star, Trophy, ExternalLink, TrendingUp, Home, Building, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +11,15 @@ import type { PickAnalysis } from "@/types";
 interface ThePickTabProps {
   thePick: PickAnalysis;
 }
+
+const listContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.1 } },
+};
+const listItem = {
+  hidden: { opacity: 0, scale: 0.96, y: 12 },
+  show: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.4 } },
+};
 
 export function ThePickTab({ thePick }: ThePickTabProps) {
   const { topPicks, sponsoredComparison, methodology } = thePick;
@@ -52,10 +63,12 @@ export function ThePickTab({ thePick }: ThePickTabProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-4">
             {topPicks.map((pick, index) => (
-              <div
+              <motion.div
                 key={index}
+                variants={listItem}
+                whileHover={{ y: -2 }}
                 className={`relative p-4 rounded-lg border-2 transition-colors ${
                   index === 0
                     ? "border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20"
@@ -72,59 +85,72 @@ export function ThePickTab({ thePick }: ThePickTabProps) {
                 }`}>
                   {index + 1}
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold">{pick.title}</p>
-                      <Badge
-                        variant={pick.type === "rental" ? "outline" : "secondary"}
-                        className="text-xs"
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {pick.imageUrl && (
+                    <div className="relative h-32 w-full shrink-0 overflow-hidden rounded-lg sm:h-20 sm:w-28">
+                      <Image
+                        src={pick.imageUrl}
+                        alt={pick.title}
+                        fill
+                        sizes="(max-width: 640px) 100vw, 112px"
+                        className="object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className="flex flex-1 flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold">{pick.title}</p>
+                        <Badge
+                          variant={pick.type === "rental" ? "outline" : "secondary"}
+                          className="text-xs"
+                        >
+                          {pick.type === "rental" ? (
+                            <Home className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Building className="h-3 w-3 mr-1" />
+                          )}
+                          {pick.type === "rental" ? "Rental" : "Hotel"}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {pick.platform}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{pick.description}</p>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span>{pick.neighborhood}</span>
+                        <span className="flex items-center gap-1">
+                          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                          {pick.reviewScore.toFixed(1)} ({pick.reviewCount} reviews)
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <TrendingUp className="h-3 w-3 text-green-500" />
+                          Score: {pick.score.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-xl font-bold">{formatCurrency(pick.price, pick.currency)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(pick.pricePerNight, pick.currency)}/night
+                        </p>
+                      </div>
+                      <a
+                        href={pick.directBookingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                       >
-                        {pick.type === "rental" ? (
-                          <Home className="h-3 w-3 mr-1" />
-                        ) : (
-                          <Building className="h-3 w-3 mr-1" />
-                        )}
-                        {pick.type === "rental" ? "Rental" : "Hotel"}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {pick.platform}
-                      </Badge>
+                        Direct Link
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
                     </div>
-                    <p className="text-sm text-muted-foreground">{pick.description}</p>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <span>{pick.neighborhood}</span>
-                      <span className="flex items-center gap-1">
-                        <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                        {pick.reviewScore.toFixed(1)} ({pick.reviewCount} reviews)
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <TrendingUp className="h-3 w-3 text-green-500" />
-                        Score: {pick.score.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-xl font-bold">{formatCurrency(pick.price, pick.currency)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatCurrency(pick.pricePerNight, pick.currency)}/night
-                      </p>
-                    </div>
-                    <a
-                      href={pick.directBookingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                    >
-                      Direct Link
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </CardContent>
       </Card>
 

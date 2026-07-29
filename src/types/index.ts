@@ -119,6 +119,7 @@ export interface HotelOption {
   savings: number; // difference between most expensive and cheapest
   starRating?: number;
   address?: string;
+  imageUrl?: string;
   coordinates: Coordinates;
   beds: BedConfiguration[];
   /** True when beds were inferred from a room name/description rather than confirmed by the data source. */

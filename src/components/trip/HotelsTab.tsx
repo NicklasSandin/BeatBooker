@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
+import { motion } from "framer-motion";
 import { Building, TrendingDown, ExternalLink, Star, BedDouble } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +22,15 @@ interface HotelsTabProps {
   hotels: HotelAnalysis;
   travelers: number;
 }
+
+const listContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08 } },
+};
+const listItem = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+};
 
 export function HotelsTab({ hotels, travelers }: HotelsTabProps) {
   const { hotels: hotelList, summary } = hotels;
@@ -172,17 +183,24 @@ export function HotelsTab({ hotels, travelers }: HotelsTabProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
+          <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-6">
             {filteredHotels.map((hotel) => (
-              <div key={hotel.name} className="space-y-3">
-                <h4 className="font-medium flex items-center gap-2">
-                  {hotel.name}
-                  {hotel.starRating && (
-                    <span className="text-xs text-muted-foreground">
-                      ({hotel.starRating}★)
-                    </span>
+              <motion.div key={hotel.name} variants={listItem} className="space-y-3">
+                <div className="flex items-center gap-3">
+                  {hotel.imageUrl && (
+                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg">
+                      <Image src={hotel.imageUrl} alt={hotel.name} fill sizes="48px" className="object-cover" />
+                    </div>
                   )}
-                </h4>
+                  <h4 className="font-medium flex items-center gap-2">
+                    {hotel.name}
+                    {hotel.starRating && (
+                      <span className="text-xs text-muted-foreground">
+                        ({hotel.starRating}★)
+                      </span>
+                    )}
+                  </h4>
+                </div>
                 <div className="grid gap-2">
                   {hotel.prices.map((price, index) => (
                     <div
@@ -225,9 +243,9 @@ export function HotelsTab({ hotels, travelers }: HotelsTabProps) {
                     </div>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </CardContent>
       </Card>
     </div>

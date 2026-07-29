@@ -158,6 +158,7 @@ function generatePick(
       directBookingUrl: l.url,
       description: `${l.bedrooms} bed, ${l.bathrooms} bath in ${l.neighborhood} — ${describeBeds(l.beds)}`,
       neighborhood: l.neighborhood,
+      imageUrl: l.imageUrl,
       coordinates: l.coordinates,
       beds: l.beds,
     }));
@@ -178,6 +179,7 @@ function generatePick(
       directBookingUrl: `https://example.com/hotel/direct/${h.name.toLowerCase().replace(/\s+/g, "-")}`,
       description: `${h.starRating}-star hotel — ${describeBeds(h.beds)}`,
       neighborhood: h.address ?? "City Center",
+      imageUrl: h.imageUrl,
       coordinates: h.coordinates,
       beds: h.beds,
     }));

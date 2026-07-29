@@ -126,7 +126,7 @@ function generateRentalCandidate(
     reviewCount: Math.floor(Math.random() * 100 + 10),
     neighborhood: neighborhoods[Math.floor(Math.random() * neighborhoods.length)],
     platform: "Simulated Demo Data",
-    imageUrl: undefined,
+    imageUrl: `https://picsum.photos/seed/rental-${index}/480/320`,
     coordinates: jitter(coordinates, 4),
     beds: generateBedConfiguration(pool, bedrooms, maxGuests, minBedWidthCm, excludeSofaBeds),
   };
@@ -180,7 +180,7 @@ async function searchHotels(params: AccommodationSearchParams): Promise<HotelAna
     { name: `The ${location} Boutique Inn`, starRating: 3, priceFloor: 80, priceSpan: 200 },
   ];
 
-  const hotels: HotelOption[] = hotelDefs.map((def) => {
+  const hotels: HotelOption[] = hotelDefs.map((def, defIndex) => {
     const prices = platforms.map((platform) => ({
       platform,
       price: Math.floor(Math.random() * def.priceSpan + def.priceFloor),
@@ -203,6 +203,7 @@ async function searchHotels(params: AccommodationSearchParams): Promise<HotelAna
       mostExpensivePrice: sorted[sorted.length - 1].price,
       savings: sorted[sorted.length - 1].price - sorted[0].price,
       address: `${Math.round(100 + Math.random() * 900)} Main St, ${location}`,
+      imageUrl: `https://picsum.photos/seed/hotel-${location}-${defIndex}/480/320`,
       coordinates: jitter(coordinates, 2),
       beds,
     };
