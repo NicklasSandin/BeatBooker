@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, Check, ExternalLink, Loader2, Sparkles, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { isTravelpayoutsConfigured } from "@/lib/affiliates";
 
 type ProviderId = "liteapi" | "simulated";
 
@@ -102,6 +103,57 @@ export default function DataSourcePage() {
                 </a>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              {isTravelpayoutsConfigured() ? (
+                <Check className="h-5 w-5 text-green-600 dark:text-green-400" />
+              ) : (
+                <WifiOff className="h-5 w-5 text-muted-foreground" />
+              )}
+              Affiliate monetization
+            </CardTitle>
+            <CardDescription>Travelpayouts (Hotellook) — Booking.com direct is planned separately</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isTravelpayoutsConfigured() ? (
+              <>
+                <Badge variant="success" className="gap-1">
+                  <Check className="h-3 w-3" /> Configured
+                </Badge>
+                <p className="text-sm text-muted-foreground">
+                  Trip results show a &ldquo;Compare Live Deals on Hotellook&rdquo; link tagged
+                  with your Travelpayouts marker.
+                </p>
+              </>
+            ) : (
+              <>
+                <Badge variant="outline" className="gap-1">
+                  <Sparkles className="h-3 w-3" /> Not configured
+                </Badge>
+                <p className="text-sm text-muted-foreground">
+                  No{" "}
+                  <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                    NEXT_PUBLIC_TRAVELPAYOUTS_MARKER
+                  </code>{" "}
+                  is set, so no affiliate link is shown. Sign up free (no traffic minimum) and add
+                  your marker to{" "}
+                  <code className="text-xs bg-muted px-1 py-0.5 rounded">.env.local</code>.
+                </p>
+                <a
+                  href="https://www.travelpayouts.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                >
+                  Sign up for Travelpayouts
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

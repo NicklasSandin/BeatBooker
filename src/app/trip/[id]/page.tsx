@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, AlertCircle, Home, Building, Star, MapPin } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, Home, Building, Star, MapPin, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +18,7 @@ import { ThePickTab } from "@/components/trip/ThePickTab";
 import { ExportButton } from "@/components/trip/ExportButton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { matchLandmark, wikimediaOriginal } from "@/lib/landmarks";
+import { getHotellookSearchUrl } from "@/lib/affiliates";
 
 const statsContainer = {
   hidden: {},
@@ -180,6 +181,13 @@ export default function TripResultsPage() {
   }
 
   const landmark = matchLandmark(trip.formData.location);
+  const hotellookUrl = getHotellookSearchUrl({
+    location: trip.formData.location,
+    startDate: trip.formData.startDate,
+    endDate: trip.formData.endDate,
+    travelers: trip.formData.travelers,
+    currency: trip.formData.currency,
+  });
 
   return (
     <div className="container py-8">
@@ -228,7 +236,17 @@ export default function TripResultsPage() {
           </div>
         </motion.div>
 
-        <div className="mb-6 flex justify-end">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+          {hotellookUrl ? (
+            <a href={hotellookUrl} target="_blank" rel="noopener noreferrer sponsored">
+              <Button variant="outline" className="gap-2">
+                Compare Live Deals on Hotellook
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+            </a>
+          ) : (
+            <span />
+          )}
           <ExportButton trip={trip} />
         </div>
 
