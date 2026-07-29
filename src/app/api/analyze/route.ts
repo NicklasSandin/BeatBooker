@@ -1,24 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import type {
   HotelAnalysis,
-  HotelOption,
   OrganicPick,
   PickAnalysis,
   RentalAnalysis,
-  RentalListing,
   TripFormData,
 } from "@/types";
+import { getAccommodationProvider } from "@/lib/providers";
+import { resolveDestination } from "@/lib/destinations";
+import { describeBeds, meetsBedRequirement } from "@/lib/beds";
 
 /**
  * POST /api/analyze
- * 
- * Generates a self-contained demo analysis for the submitted trip.
- * 
+ *
+ * Resolves the trip's destination to real coordinates/currency, then asks
+ * the active AccommodationProvider (live LiteAPI data if LITEAPI_KEY is
+ * configured, otherwise the worldwide-aware simulated provider) for rentals
+ * and hotels, and ranks "The Pick" from the combined results.
+ *
  * Request body:
  * {
  *   tripId: string;
  *   formData: TripFormData;
- *   connections: MCPConnection[];
  * }
  */
 export async function POST(request: NextRequest) {
@@ -33,24 +36,48 @@ export async function POST(request: NextRequest) {
 
     const { tripId, formData } = body;
 
-    // Simulate analysis delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const destination = formData.coordinates
+      ? {
+          coordinates: formData.coordinates,
+          country: formData.country,
+          countryCode: formData.countryCode,
+          currency: formData.currency ?? "USD",
+        }
+      : await resolveDestination(formData.location);
 
-    // Generate demo rental data.
-    const rentals = generateSimulatedRentals(formData);
+    if (!destination) {
+      return NextResponse.json(
+        { error: `Couldn't find "${formData.location}". Try picking a suggestion from the destination search.` },
+        { status: 400 }
+      );
+    }
 
-    // Generate demo hotel data.
-    const hotels = generateSimulatedHotels(formData);
+    // Simulate a brief analysis delay for the demo provider; live LiteAPI
+    // calls already take real network time.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    // Generate "The Pick" analysis
-    const thePick = generateSimulatedPick(rentals, hotels);
+    const provider = getAccommodationProvider();
+    const searchParams = {
+      location: formData.location,
+      coordinates: destination.coordinates,
+      countryCode: destination.countryCode,
+      currency: destination.currency,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      maxBudget: formData.maxBudget,
+      travelers: formData.travelers,
+      minBedWidthCm: formData.minBedWidthCm,
+      excludeSofaBeds: formData.excludeSofaBeds,
+    };
 
-    return NextResponse.json({
-      tripId,
-      rentals,
-      hotels,
-      thePick,
-    });
+    const [rentals, hotels] = await Promise.all([
+      provider.searchRentals(searchParams),
+      provider.searchHotels(searchParams),
+    ]);
+
+    const thePick = generatePick(rentals, hotels, formData);
+
+    return NextResponse.json({ tripId, rentals, hotels, thePick, provider: provider.id });
   } catch (error) {
     console.error("Analysis error:", error);
     return NextResponse.json(
@@ -97,193 +124,15 @@ function isAnalysisRequest(
 }
 
 /**
- * Generate simulated rental data
- * In production, this would query OpenBnB MCP server
+ * Combine rental and hotel results, rank by value (review score / price),
+ * and exclude anything that fails a strict bed-size requirement.
  */
-function generateSimulatedRentals(formData: TripFormData): RentalAnalysis {
-  const { location, startDate, endDate, maxBudget, travelers } = formData;
-  const nights = Math.max(
-    1,
-    Math.round(
-      (new Date(endDate).getTime() - new Date(startDate).getTime()) /
-        (24 * 60 * 60 * 1000)
-    )
-  );
-  const minimumPrice = Math.max(20, Math.min(50, maxBudget));
-  const priceSpan = Math.max(1, maxBudget - minimumPrice);
-  const neighborhoods = [
-    "Downtown",
-    "Midtown",
-    "East Side",
-    "West End",
-    "North District",
-    "Arts District",
-    "Waterfront",
-    "University Area",
-  ];
-
-  const listings: RentalListing[] = Array.from({ length: 12 }, (_, i) => ({
-    id: `rental-${i + 1}`,
-    title: `${["Cozy", "Spacious", "Modern", "Charming", "Luxury", "Bright"][i % 6]} ${["Apartment", "Studio", "Loft", "Villa", "Condo", "House"][i % 6]} in ${location}`,
-    url: `https://example.com/rentals/${i + 1}`,
-    pricePerNight: Math.min(
-      maxBudget,
-      Math.round(minimumPrice + Math.random() * priceSpan)
-    ),
-    totalPrice: 0,
-    currency: "USD",
-    bedrooms: Math.floor(Math.random() * 3) + 1,
-    bathrooms: Math.floor(Math.random() * 2) + 1,
-    maxGuests: travelers + Math.floor(Math.random() * 2),
-    reviewScore: Math.floor(Math.random() * 11 + 40) / 10,
-    reviewCount: Math.floor(Math.random() * 100 + 10),
-    neighborhood: neighborhoods[Math.floor(Math.random() * neighborhoods.length)],
-    platform: "OpenBnB",
-    imageUrl: undefined,
-  }));
-
-  // Calculate prices for the requested stay.
-  listings.forEach((l) => {
-    l.totalPrice = l.pricePerNight * nights;
-  });
-
-  // Sort by total price
-  listings.sort((a, b) => a.totalPrice - b.totalPrice);
-
-  // Cheapest week
-  const cheapestWeek = {
-    startDate,
-    endDate,
-    totalPrice: listings[0].totalPrice,
-    avgPricePerNight: listings[0].pricePerNight,
-    listings: listings.slice(0, 3),
-  };
-
-  // Price range
-  const prices = listings.map((l) => l.pricePerNight);
-  const priceRange = {
-    min: Math.min(...prices),
-    max: Math.max(...prices),
-    avg: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
-  };
-
-  // Best neighborhoods
-  const neighborhoodMap = new Map<string, { total: number; count: number }>();
-  listings.forEach((l) => {
-    const existing = neighborhoodMap.get(l.neighborhood) || { total: 0, count: 0 };
-    existing.total += l.pricePerNight;
-    existing.count += 1;
-    neighborhoodMap.set(l.neighborhood, existing);
-  });
-
-  const bestNeighborhoods = Array.from(neighborhoodMap.entries())
-    .map(([name, data]) => ({
-      name,
-      avgPrice: Math.round(data.total / data.count),
-      listingCount: data.count,
-    }))
-    .sort((a, b) => a.avgPrice - b.avgPrice)
-    .slice(0, 5);
-
-  return {
-    cheapestWeek,
-    priceRange,
-    bestNeighborhoods,
-    allListings: listings,
-  };
-}
-
-/**
- * Generate simulated hotel data
- * In production, this would query Gondola MCP server
- */
-function generateSimulatedHotels(formData: TripFormData): HotelAnalysis {
-  const { location } = formData;
-  const platforms = ["Booking.com", "Expedia", "Hotels.com", "Agoda", "Kayak", "Trip.com"];
-
-  const hotels: Array<Pick<HotelOption, "name" | "starRating" | "prices">> = [
-    {
-      name: `Grand ${location} Hotel`,
-      starRating: 4,
-      prices: platforms.map((platform) => ({
-        platform,
-        price: Math.floor(Math.random() * 300 + 100),
-        currency: "USD",
-        url: `https://example.com/hotel/${platform.toLowerCase()}`,
-        isRefundable: Math.random() > 0.3,
-        rating: Math.floor(Math.random() * 20 + 30) / 10,
-      })),
-    },
-    {
-      name: `${location} Marriott Downtown`,
-      starRating: 4,
-      prices: platforms.map((platform) => ({
-        platform,
-        price: Math.floor(Math.random() * 400 + 150),
-        currency: "USD",
-        url: `https://example.com/hotel/${platform.toLowerCase()}`,
-        isRefundable: Math.random() > 0.3,
-        rating: Math.floor(Math.random() * 20 + 30) / 10,
-      })),
-    },
-    {
-      name: `The ${location} Boutique Inn`,
-      starRating: 3,
-      prices: platforms.map((platform) => ({
-        platform,
-        price: Math.floor(Math.random() * 200 + 80),
-        currency: "USD",
-        url: `https://example.com/hotel/${platform.toLowerCase()}`,
-        isRefundable: Math.random() > 0.3,
-        rating: Math.floor(Math.random() * 20 + 30) / 10,
-      })),
-    },
-  ];
-
-  // Calculate cheapest for each hotel
-  const hotelOptions = hotels.map((hotel) => {
-    const sortedPrices = [...hotel.prices].sort((a, b) => a.price - b.price);
-    return {
-      name: hotel.name,
-      starRating: hotel.starRating,
-      prices: hotel.prices,
-      cheapestPlatform: sortedPrices[0].platform,
-      cheapestPrice: sortedPrices[0].price,
-      mostExpensivePrice: sortedPrices[sortedPrices.length - 1].price,
-      savings: sortedPrices[sortedPrices.length - 1].price - sortedPrices[0].price,
-    };
-  });
-
-  const totalSavings = hotelOptions.reduce((sum, h) => sum + h.savings, 0);
-  const platformSavings = new Map<string, number>();
-  hotelOptions.forEach((h) => {
-    platformSavings.set(
-      h.cheapestPlatform,
-      (platformSavings.get(h.cheapestPlatform) || 0) + h.savings
-    );
-  });
-
-  const bestPlatform = Array.from(platformSavings.entries()).sort(
-    (a, b) => b[1] - a[1]
-  )[0][0];
-
-  return {
-    hotels: hotelOptions,
-    summary: {
-      totalSavings,
-      bestPlatform,
-    },
-  };
-}
-
-/**
- * Generate "The Pick" analysis
- * Combines rental and hotel data, ranks by value (review score / price)
- */
-function generateSimulatedPick(
+function generatePick(
   rentals: RentalAnalysis,
-  hotels: HotelAnalysis
+  hotels: HotelAnalysis,
+  formData: TripFormData
 ): PickAnalysis {
+  const { travelers, minBedWidthCm, excludeSofaBeds } = formData;
   const stayNights = Math.max(
     1,
     Math.round(
@@ -292,64 +141,70 @@ function generateSimulatedPick(
         (24 * 60 * 60 * 1000)
     )
   );
-  const rentalPicks: OrganicPick[] = rentals.allListings.slice(0, 5).map((l) => ({
-    title: l.title,
-    type: "rental" as const,
-    platform: l.platform,
-    price: l.totalPrice,
-    pricePerNight: l.pricePerNight,
-    score: l.reviewScore / (l.pricePerNight / 100),
-    reviewScore: l.reviewScore,
-    reviewCount: l.reviewCount,
-    directBookingUrl: l.url,
-    description: `${l.bedrooms} bed, ${l.bathrooms} bath in ${l.neighborhood}`,
-    neighborhood: l.neighborhood,
-  }));
 
-  const hotelPicks: OrganicPick[] = hotels.hotels.slice(0, 3).map((h) => ({
-    title: h.name,
-    type: "hotel" as const,
-    platform: h.cheapestPlatform,
-    price: h.cheapestPrice * stayNights,
-    pricePerNight: h.cheapestPrice,
-    score: ((h.starRating ?? 0) * 10) / (h.cheapestPrice / 100),
-    reviewScore: (h.starRating ?? 0) * 1.25,
-    reviewCount: Math.floor(Math.random() * 500 + 100),
-    directBookingUrl: `https://example.com/hotel/direct/${h.name.toLowerCase().replace(/\s+/g, "-")}`,
-    description: `${h.starRating}-star hotel in ${h.name.split(" ")[0]}`,
-    neighborhood: "City Center",
-  }));
+  const rentalPicks: OrganicPick[] = rentals.allListings
+    .filter((l) => meetsBedRequirement(l.beds, minBedWidthCm, excludeSofaBeds))
+    .slice(0, 5)
+    .map((l) => ({
+      title: l.title,
+      type: "rental" as const,
+      platform: l.platform,
+      price: l.totalPrice,
+      pricePerNight: l.pricePerNight,
+      currency: l.currency,
+      score: l.reviewScore / (l.pricePerNight / 100),
+      reviewScore: l.reviewScore,
+      reviewCount: l.reviewCount,
+      directBookingUrl: l.url,
+      description: `${l.bedrooms} bed, ${l.bathrooms} bath in ${l.neighborhood} — ${describeBeds(l.beds)}`,
+      neighborhood: l.neighborhood,
+      coordinates: l.coordinates,
+      beds: l.beds,
+    }));
 
-  // Combine and sort by score
-  const allPicks = [...rentalPicks, ...hotelPicks].sort(
-    (a, b) => b.score - a.score
-  );
+  const hotelPicks: OrganicPick[] = hotels.hotels
+    .filter((h) => meetsBedRequirement(h.beds, minBedWidthCm, excludeSofaBeds))
+    .slice(0, 3)
+    .map((h) => ({
+      title: h.name,
+      type: "hotel" as const,
+      platform: h.cheapestPlatform,
+      price: h.cheapestPrice * stayNights,
+      pricePerNight: h.cheapestPrice,
+      currency: h.prices.find((p) => p.platform === h.cheapestPlatform)?.currency ?? "USD",
+      score: ((h.starRating ?? 0) * 10) / (h.cheapestPrice / 100),
+      reviewScore: (h.starRating ?? 0) * 1.25,
+      reviewCount: Math.floor(Math.random() * 500 + 100),
+      directBookingUrl: `https://example.com/hotel/direct/${h.name.toLowerCase().replace(/\s+/g, "-")}`,
+      description: `${h.starRating}-star hotel — ${describeBeds(h.beds)}`,
+      neighborhood: h.address ?? "City Center",
+      coordinates: h.coordinates,
+      beds: h.beds,
+    }));
 
+  const allPicks = [...rentalPicks, ...hotelPicks].sort((a, b) => b.score - a.score);
   const topPicks = allPicks.slice(0, 3);
 
   const sponsoredComparison = [
     {
       title: `Sponsored: Premium ${topPicks[0]?.title.split(" ").slice(0, 2).join(" ") || "Suite"} (Google Ads)`,
       platform: "Booking.com",
-      price: topPicks[0]?.price
-        ? Math.round(topPicks[0].price * 1.35)
-        : 1500,
+      price: topPicks[0]?.price ? Math.round(topPicks[0].price * 1.35) : 1500,
+      currency: topPicks[0]?.currency ?? "USD",
       url: "https://example.com/sponsored/1",
     },
     {
       title: `Sponsored: ${topPicks[1]?.title.split(" ")[0] || "Luxury"} Stay (TripAdvisor)`,
       platform: "Expedia",
-      price: topPicks[1]?.price
-        ? Math.round(topPicks[1].price * 1.25)
-        : 1200,
+      price: topPicks[1]?.price ? Math.round(topPicks[1].price * 1.25) : 1200,
+      currency: topPicks[1]?.currency ?? "USD",
       url: "https://example.com/sponsored/2",
     },
     {
       title: "Sponsored: City Break Package (Booking.com)",
       platform: "Booking.com",
-      price: topPicks[2]?.price
-        ? Math.round(topPicks[2].price * 1.4)
-        : 1800,
+      price: topPicks[2]?.price ? Math.round(topPicks[2].price * 1.4) : 1800,
+      currency: topPicks[2]?.currency ?? "USD",
       url: "https://example.com/sponsored/3",
     },
   ];
@@ -358,6 +213,6 @@ function generateSimulatedPick(
     topPicks,
     sponsoredComparison,
     methodology:
-      "Our algorithm ranks listings by a value score that divides review score by price per night, then multiplies by 100. This ensures the best combination of quality and affordability. We compare against typical sponsored listings found on major booking platforms to show you how much you can save by booking directly.",
+      `Ranks listings by a value score (review score / price per night x 100), after excluding anything that doesn't meet your bed-size requirement${travelers > 1 ? ` for ${travelers} travelers` : ""}. Compared against typical sponsored listings found on major booking platforms to show how much you can save by booking directly.`,
   };
 }

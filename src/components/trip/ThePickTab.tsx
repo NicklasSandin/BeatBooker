@@ -91,6 +91,7 @@ export function ThePickTab({ thePick }: ThePickTabProps) {
                         {pick.platform}
                       </Badge>
                     </div>
+                    <p className="text-sm text-muted-foreground">{pick.description}</p>
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                       <span>{pick.neighborhood}</span>
                       <span className="flex items-center gap-1">
@@ -105,9 +106,9 @@ export function ThePickTab({ thePick }: ThePickTabProps) {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <p className="text-xl font-bold">{formatCurrency(pick.price)}</p>
+                      <p className="text-xl font-bold">{formatCurrency(pick.price, pick.currency)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatCurrency(pick.pricePerNight)}/night
+                        {formatCurrency(pick.pricePerNight, pick.currency)}/night
                       </p>
                     </div>
                     <a
@@ -160,7 +161,7 @@ export function ThePickTab({ thePick }: ThePickTabProps) {
                         </Badge>
                       </td>
                       <td className="py-2 text-right font-semibold">
-                        {formatCurrency(sponsored.price)}
+                        {formatCurrency(sponsored.price, sponsored.currency)}
                       </td>
                       <td className="py-2 text-right">
                         <Badge variant="warning" className="text-xs">

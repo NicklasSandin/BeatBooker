@@ -1,18 +1,35 @@
 "use client";
 
-import { Building, TrendingDown, ExternalLink, Star } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Building, TrendingDown, ExternalLink, Star, BedDouble } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
+import { BED_SIZE_FILTER_TIERS, bedWarnings, describeBeds, meetsBedRequirement } from "@/lib/beds";
 import type { HotelAnalysis } from "@/types";
 
 interface HotelsTabProps {
   hotels: HotelAnalysis;
+  travelers: number;
 }
 
-export function HotelsTab({ hotels }: HotelsTabProps) {
+export function HotelsTab({ hotels, travelers }: HotelsTabProps) {
   const { hotels: hotelList, summary } = hotels;
+  const [minBedFilter, setMinBedFilter] = useState(0);
+  const currency = hotelList[0]?.prices[0]?.currency ?? "USD";
+
+  const filteredHotels = useMemo(
+    () => hotelList.filter((h) => meetsBedRequirement(h.beds, minBedFilter, false)),
+    [hotelList, minBedFilter]
+  );
 
   return (
     <div className="space-y-6">
@@ -32,7 +49,7 @@ export function HotelsTab({ hotels }: HotelsTabProps) {
             <div>
               <p className="text-sm text-muted-foreground">Total Potential Savings</p>
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {formatCurrency(summary.totalSavings)}
+                {formatCurrency(summary.totalSavings, currency)}
               </p>
             </div>
             <div>
@@ -46,13 +63,35 @@ export function HotelsTab({ hotels }: HotelsTabProps) {
       {/* Hotel Comparison Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Building className="h-5 w-5 text-primary" />
-            Hotel Price Comparison
-          </CardTitle>
-          <CardDescription>
-            Compare prices across booking platforms for each hotel
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Building className="h-5 w-5 text-primary" />
+                Hotel Price Comparison
+              </CardTitle>
+              <CardDescription>
+                {filteredHotels.length} of {hotelList.length} hotels match your bed-size filter
+              </CardDescription>
+            </div>
+            <div className="w-full sm:w-64">
+              <Select
+                value={String(minBedFilter)}
+                onValueChange={(value) => setMinBedFilter(Number(value))}
+              >
+                <SelectTrigger>
+                  <BedDouble className="h-4 w-4 mr-2 text-muted-foreground shrink-0" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BED_SIZE_FILTER_TIERS.map((tier) => (
+                    <SelectItem key={tier.minBedWidthCm} value={String(tier.minBedWidthCm)}>
+                      {tier.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -68,10 +107,10 @@ export function HotelsTab({ hotels }: HotelsTabProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {hotelList.map((hotel) => (
+                {filteredHotels.map((hotel) => (
                   <TableRow key={hotel.name}>
                     <TableCell className="font-medium">
-                      <div>
+                      <div className="space-y-1">
                         <p>{hotel.name}</p>
                         {hotel.starRating && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -79,6 +118,16 @@ export function HotelsTab({ hotels }: HotelsTabProps) {
                             {hotel.starRating} Star
                           </div>
                         )}
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <BedDouble className="h-3 w-3" />
+                          {describeBeds(hotel.beds)}
+                          {hotel.bedsEstimated ? " (estimated)" : ""}
+                        </div>
+                        {bedWarnings(hotel.beds, travelers).map((warning) => (
+                          <Badge key={warning} variant="warning" className="text-xs font-normal block w-fit">
+                            {warning}
+                          </Badge>
+                        ))}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -87,13 +136,13 @@ export function HotelsTab({ hotels }: HotelsTabProps) {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-semibold text-green-600 dark:text-green-400">
-                      {formatCurrency(hotel.cheapestPrice)}
+                      {formatCurrency(hotel.cheapestPrice, currency)}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
-                      {formatCurrency(hotel.mostExpensivePrice)}
+                      {formatCurrency(hotel.mostExpensivePrice, currency)}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
-                      {formatCurrency(hotel.savings)}
+                      {formatCurrency(hotel.savings, currency)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -105,6 +154,11 @@ export function HotelsTab({ hotels }: HotelsTabProps) {
                 ))}
               </TableBody>
             </Table>
+            {filteredHotels.length === 0 && (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                No hotels match this bed-size filter. Try a lower minimum.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -119,7 +173,7 @@ export function HotelsTab({ hotels }: HotelsTabProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {hotelList.map((hotel) => (
+            {filteredHotels.map((hotel) => (
               <div key={hotel.name} className="space-y-3">
                 <h4 className="font-medium flex items-center gap-2">
                   {hotel.name}
@@ -155,7 +209,7 @@ export function HotelsTab({ hotels }: HotelsTabProps) {
                               : ""
                           }`}
                         >
-                          {formatCurrency(price.price)}
+                          {formatCurrency(price.price, price.currency)}
                         </span>
                         {price.url && (
                           <a

@@ -1,9 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, AlertCircle, Home, Building, Star } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, Home, Building, Star, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +15,12 @@ import { HotelsTab } from "@/components/trip/HotelsTab";
 import { ThePickTab } from "@/components/trip/ThePickTab";
 import { ExportButton } from "@/components/trip/ExportButton";
 import { formatCurrency, formatDate } from "@/lib/utils";
+
+// Leaflet touches `window` at module-eval time, so the map must never render on the server.
+const TripMap = dynamic(() => import("@/components/map/TripMap"), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[500px] w-full rounded-lg" />,
+});
 
 function TripSkeleton() {
   return (
@@ -246,7 +253,7 @@ export default function TripResultsPage() {
 
         {/* Results Tabs */}
         <Tabs defaultValue="rentals" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="rentals" className="gap-2">
               <Home className="h-4 w-4" />
               Rentals
@@ -259,10 +266,14 @@ export default function TripResultsPage() {
               <Star className="h-4 w-4" />
               The Pick
             </TabsTrigger>
+            <TabsTrigger value="map" className="gap-2">
+              <MapPin className="h-4 w-4" />
+              Map
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="rentals" className="mt-6">
             {trip.rentals ? (
-              <RentalsTab rentals={trip.rentals} />
+              <RentalsTab rentals={trip.rentals} travelers={trip.formData.travelers} />
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-8">
@@ -274,7 +285,7 @@ export default function TripResultsPage() {
           </TabsContent>
           <TabsContent value="hotels" className="mt-6">
             {trip.hotels ? (
-              <HotelsTab hotels={trip.hotels} />
+              <HotelsTab hotels={trip.hotels} travelers={trip.formData.travelers} />
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-8">
@@ -295,6 +306,29 @@ export default function TripResultsPage() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+          <TabsContent value="map" className="mt-6">
+            {(() => {
+              const rentalListings = trip.rentals?.allListings ?? [];
+              const hotelOptions = trip.hotels?.hotels ?? [];
+              const mapCenter =
+                trip.formData.coordinates ??
+                rentalListings[0]?.coordinates ??
+                hotelOptions[0]?.coordinates;
+
+              if (!mapCenter || (rentalListings.length === 0 && hotelOptions.length === 0)) {
+                return (
+                  <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-8">
+                      <MapPin className="h-8 w-8 text-muted-foreground mb-2" />
+                      <p className="text-muted-foreground">No map data available</p>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              return <TripMap center={mapCenter} rentals={rentalListings} hotels={hotelOptions} />;
+            })()}
           </TabsContent>
         </Tabs>
       </div>

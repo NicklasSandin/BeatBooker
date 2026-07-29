@@ -1,21 +1,30 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Calendar, Users, DollarSign, MapPin, Loader2 } from "lucide-react";
+import { Search, Calendar, Users, DollarSign, MapPin, Loader2, BedDouble } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useTripStore } from "@/store/tripStore";
-import { useMCPStore } from "@/store/mcpStore";
 import type { TripFormData } from "@/types";
+import { BED_SIZE_FILTER_TIERS } from "@/lib/beds";
+import type { GeocodeResult } from "@/app/api/geocode/route";
 
 function NewTripForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { createTrip, setTripStatus, setRentals, setHotels, setThePick } = useTripStore();
-  const { connections } = useMCPStore();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [formError, setFormError] = useState("");
   const [formData, setFormData] = useState<TripFormData>({
@@ -24,7 +33,62 @@ function NewTripForm() {
     endDate: "",
     maxBudget: 200,
     travelers: 1,
+    minBedWidthCm: 0,
+    excludeSofaBeds: false,
   });
+
+  // --- Destination autocomplete (worldwide, via /api/geocode) ---
+  const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const skipNextFetch = useRef(false);
+
+  useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
+    const query = formData.location.trim();
+    const controller = new AbortController();
+
+    const timeout = setTimeout(async () => {
+      if (query.length < 2) {
+        setSuggestions([]);
+        return;
+      }
+      setIsGeocoding(true);
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        setSuggestions(data.results ?? []);
+        setShowSuggestions(true);
+      } catch {
+        // ignore — likely aborted by a newer keystroke
+      } finally {
+        setIsGeocoding(false);
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  }, [formData.location]);
+
+  const selectDestination = (result: GeocodeResult) => {
+    skipNextFetch.current = true;
+    setFormData({
+      ...formData,
+      location: `${result.city}, ${result.country}`,
+      coordinates: result.coordinates,
+      country: result.country,
+      countryCode: result.countryCode,
+      currency: result.currency,
+    });
+    setShowSuggestions(false);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -52,15 +116,10 @@ function NewTripForm() {
     setTripStatus(tripId, "analyzing");
 
     try {
-      // Call the analyze API
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tripId,
-          formData: normalizedFormData,
-          connections,
-        }),
+        body: JSON.stringify({ tripId, formData: normalizedFormData }),
       });
 
       const result = await response.json();
@@ -89,7 +148,8 @@ function NewTripForm() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight">New Trip Analysis</h1>
           <p className="text-muted-foreground mt-1">
-            Enter your trip details and let BeatBooker find the best deals.
+            Search anywhere in the world and let BeatBooker find the best deals — filtered by
+            real bed sizes, not just &ldquo;sleeps N&rdquo;.
           </p>
         </div>
 
@@ -97,25 +157,72 @@ function NewTripForm() {
           <CardHeader>
             <CardTitle>Trip Details</CardTitle>
             <CardDescription>
-              Fill in your destination, travel dates, and budget preferences.
+              Fill in your destination, travel dates, budget, and bed-size preferences.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Location */}
               <div className="space-y-2">
-                <Label htmlFor="location">Destination (City, Country, or Region)</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="location"
-                    placeholder="e.g., Paris, Tokyo, New York"
-                    className="pl-10"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    required
-                  />
-                </div>
+                <Label htmlFor="location">Destination (anywhere in the world)</Label>
+                <Popover
+                  open={showSuggestions && suggestions.length > 0}
+                  onOpenChange={setShowSuggestions}
+                >
+                  <PopoverTrigger asChild>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                      <Input
+                        id="location"
+                        placeholder="e.g., Paris, Oslo, Tokyo"
+                        className="pl-10"
+                        value={formData.location}
+                        autoComplete="off"
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            location: e.target.value,
+                            coordinates: undefined,
+                            countryCode: undefined,
+                            currency: undefined,
+                          })
+                        }
+                        onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                        required
+                      />
+                      {isGeocoding && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    className="w-[var(--radix-popover-trigger-width)] p-1 max-h-72 overflow-auto"
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                    onInteractOutside={() => setShowSuggestions(false)}
+                  >
+                    {suggestions.map((s, i) => (
+                      <button
+                        key={`${s.city}-${s.countryCode}-${i}`}
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground"
+                        onClick={() => selectDestination(s)}
+                      >
+                        <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span>
+                          {s.city}
+                          {s.admin1 ? `, ${s.admin1}` : ""}, {s.country}
+                        </span>
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+                {formData.coordinates && (
+                  <p className="text-xs text-muted-foreground">
+                    Resolved to {formData.coordinates.lat.toFixed(2)}, {formData.coordinates.lng.toFixed(2)}
+                    {formData.currency ? ` · ${formData.currency}` : ""}
+                  </p>
+                )}
               </div>
 
               {/* Date Range */}
@@ -126,8 +233,8 @@ function NewTripForm() {
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="startDate"
-                    type="date"
-                    min={new Date().toISOString().split("T")[0]}
+                      type="date"
+                      min={new Date().toISOString().split("T")[0]}
                       className="pl-10"
                       value={formData.startDate}
                       onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
@@ -141,8 +248,8 @@ function NewTripForm() {
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="endDate"
-                    type="date"
-                    min={formData.startDate || new Date().toISOString().split("T")[0]}
+                      type="date"
+                      min={formData.startDate || new Date().toISOString().split("T")[0]}
                       className="pl-10"
                       value={formData.endDate}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
@@ -187,6 +294,46 @@ function NewTripForm() {
                 </div>
               </div>
 
+              {/* Bed size preferences */}
+              <div className="space-y-3 rounded-lg border p-4">
+                <div className="flex items-center gap-2">
+                  <BedDouble className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm font-medium">Bed size preferences</p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  &ldquo;Sleeps 2&rdquo; doesn&apos;t mean two adults actually fit — filter by real bed
+                  width instead.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="minBedWidth">Minimum bed size</Label>
+                  <Select
+                    value={String(formData.minBedWidthCm ?? 0)}
+                    onValueChange={(value) => setFormData({ ...formData, minBedWidthCm: Number(value) })}
+                  >
+                    <SelectTrigger id="minBedWidth">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BED_SIZE_FILTER_TIERS.map((tier) => (
+                        <SelectItem key={tier.minBedWidthCm} value={String(tier.minBedWidthCm)}>
+                          {tier.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="excludeSofaBeds" className="cursor-pointer">
+                    Exclude listings relying on a sofa bed
+                  </Label>
+                  <Switch
+                    id="excludeSofaBeds"
+                    checked={Boolean(formData.excludeSofaBeds)}
+                    onCheckedChange={(checked) => setFormData({ ...formData, excludeSofaBeds: checked })}
+                  />
+                </div>
+              </div>
+
               {formError && (
                 <p role="alert" className="text-sm text-destructive">
                   {formError}
@@ -213,45 +360,6 @@ function NewTripForm() {
                 )}
               </Button>
             </form>
-          </CardContent>
-        </Card>
-
-        {/* Analysis mode */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="text-lg">Demo Analysis</CardTitle>
-            <CardDescription>
-              Results use generated sample listings so you can evaluate the complete workflow
-              without external accounts. Configured connectors are available for connection
-              testing but are not queried by this demo analysis.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
-              Configured connectors
-            </p>
-            <div className="space-y-2">
-              {connections.map((conn) => (
-                <div key={conn.id} className="flex items-center justify-between text-sm">
-                  <span>{conn.name}</span>
-                  <span
-                    className={`text-xs ${
-                      conn.status === "connected"
-                        ? "text-green-600 dark:text-green-400"
-                        : conn.status === "error"
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    {conn.status === "connected"
-                      ? "Connected"
-                      : conn.status === "error"
-                      ? "Error"
-                      : "Not tested"}
-                  </span>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
       </div>

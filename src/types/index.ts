@@ -2,28 +2,30 @@
 // BeatBooker - Core Type Definitions
 // ============================================================
 
-// --- MCP Connection Types ---
-export interface MCPConnection {
-  id: string;
-  name: string;
-  url: string;
-  type: 'rentals' | 'hotels' | 'custom';
-  status: 'connected' | 'disconnected' | 'error';
-  requiresKey: boolean;
-  apiKey?: string;
-  description: string;
+// --- Bed Size Types ---
+// See src/lib/beds.ts for the reference dimension table and helpers.
+export type BedType =
+  | "twin"
+  | "full_double"
+  | "queen"
+  | "king"
+  | "cal_king"
+  | "eu_single"
+  | "eu_double_140"
+  | "scandinavian_180"
+  | "eu_king_200"
+  | "sofa_bed"
+  | "bunk_bed";
+
+export interface BedConfiguration {
+  type: BedType;
+  count: number;
 }
 
-export interface MCPTool {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-}
-
-export interface MCPResponse {
-  success: boolean;
-  data?: unknown;
-  error?: string;
+// --- Geo Types ---
+export interface Coordinates {
+  lat: number;
+  lng: number;
 }
 
 // --- Trip Types ---
@@ -33,6 +35,14 @@ export interface TripFormData {
   endDate: string;   // ISO date string
   maxBudget: number;
   travelers: number;
+  coordinates?: Coordinates; // resolved via /api/geocode when the user picks a place
+  country?: string;
+  countryCode?: string;
+  currency?: string;
+  // Minimum bed width in cm required by the traveler (e.g. 152 = "Queen & up").
+  // Undefined/0 means no bed-size requirement.
+  minBedWidthCm?: number;
+  excludeSofaBeds?: boolean;
 }
 
 export interface Trip {
@@ -63,6 +73,10 @@ export interface RentalListing {
   neighborhood: string;
   platform: string;
   imageUrl?: string;
+  coordinates: Coordinates;
+  beds: BedConfiguration[];
+  /** True when beds were inferred from a room name/description rather than confirmed by the data source. */
+  bedsEstimated?: boolean;
 }
 
 export interface RentalAnalysis {
@@ -105,6 +119,10 @@ export interface HotelOption {
   savings: number; // difference between most expensive and cheapest
   starRating?: number;
   address?: string;
+  coordinates: Coordinates;
+  beds: BedConfiguration[];
+  /** True when beds were inferred from a room name/description rather than confirmed by the data source. */
+  bedsEstimated?: boolean;
 }
 
 export interface HotelAnalysis {
@@ -122,6 +140,7 @@ export interface OrganicPick {
   platform: string;
   price: number;
   pricePerNight: number;
+  currency: string;
   score: number; // reviewScore / price ratio
   reviewScore: number;
   reviewCount: number;
@@ -129,12 +148,15 @@ export interface OrganicPick {
   description: string;
   neighborhood: string;
   imageUrl?: string;
+  coordinates: Coordinates;
+  beds: BedConfiguration[];
 }
 
 export interface SponsoredListing {
   title: string;
   platform: string;
   price: number;
+  currency: string;
   url: string;
 }
 

@@ -1,17 +1,34 @@
 "use client";
 
-import { Calendar, DollarSign, MapPin, Home, TrendingUp, TrendingDown } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Calendar, DollarSign, MapPin, Home, TrendingUp, TrendingDown, BedDouble } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { BED_SIZE_FILTER_TIERS, bedWarnings, describeBeds, meetsBedRequirement } from "@/lib/beds";
 import type { RentalAnalysis } from "@/types";
 
 interface RentalsTabProps {
   rentals: RentalAnalysis;
+  travelers: number;
 }
 
-export function RentalsTab({ rentals }: RentalsTabProps) {
+export function RentalsTab({ rentals, travelers }: RentalsTabProps) {
   const { cheapestWeek, priceRange, bestNeighborhoods, allListings } = rentals;
+  const [minBedFilter, setMinBedFilter] = useState(0);
+  const currency = allListings[0]?.currency ?? "USD";
+
+  const filteredListings = useMemo(
+    () => allListings.filter((l) => meetsBedRequirement(l.beds, minBedFilter, false)),
+    [allListings, minBedFilter]
+  );
 
   return (
     <div className="space-y-6">
@@ -37,13 +54,13 @@ export function RentalsTab({ rentals }: RentalsTabProps) {
             <div>
               <p className="text-sm text-muted-foreground">Total Price</p>
               <p className="text-2xl font-bold text-primary">
-                {formatCurrency(cheapestWeek.totalPrice)}
+                {formatCurrency(cheapestWeek.totalPrice, currency)}
               </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Avg per Night</p>
               <p className="font-semibold">
-                {formatCurrency(cheapestWeek.avgPricePerNight)}
+                {formatCurrency(cheapestWeek.avgPricePerNight, currency)}
               </p>
             </div>
           </div>
@@ -65,7 +82,7 @@ export function RentalsTab({ rentals }: RentalsTabProps) {
               <div>
                 <p className="text-sm text-muted-foreground">Minimum</p>
                 <p className="font-semibold text-green-600 dark:text-green-400">
-                  {formatCurrency(priceRange.min)}
+                  {formatCurrency(priceRange.min, currency)}
                 </p>
               </div>
             </div>
@@ -73,7 +90,7 @@ export function RentalsTab({ rentals }: RentalsTabProps) {
               <Home className="h-4 w-4 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">Average</p>
-                <p className="font-semibold">{formatCurrency(priceRange.avg)}</p>
+                <p className="font-semibold">{formatCurrency(priceRange.avg, currency)}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -81,7 +98,7 @@ export function RentalsTab({ rentals }: RentalsTabProps) {
               <div>
                 <p className="text-sm text-muted-foreground">Maximum</p>
                 <p className="font-semibold text-red-600 dark:text-red-400">
-                  {formatCurrency(priceRange.max)}
+                  {formatCurrency(priceRange.max, currency)}
                 </p>
               </div>
             </div>
@@ -119,7 +136,7 @@ export function RentalsTab({ rentals }: RentalsTabProps) {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold">{formatCurrency(neighborhood.avgPrice)}</p>
+                  <p className="font-semibold">{formatCurrency(neighborhood.avgPrice, currency)}</p>
                   <p className="text-xs text-muted-foreground">avg/night</p>
                 </div>
               </div>
@@ -131,48 +148,95 @@ export function RentalsTab({ rentals }: RentalsTabProps) {
       {/* All Listings */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Available Rentals</CardTitle>
-          <CardDescription>
-            {allListings.length} listing{allListings.length > 1 ? "s" : ""} found within your budget
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg">Available Rentals</CardTitle>
+              <CardDescription>
+                {filteredListings.length} of {allListings.length} listing
+                {allListings.length > 1 ? "s" : ""} match your bed-size filter
+              </CardDescription>
+            </div>
+            <div className="w-full sm:w-64">
+              <Select
+                value={String(minBedFilter)}
+                onValueChange={(value) => setMinBedFilter(Number(value))}
+              >
+                <SelectTrigger>
+                  <BedDouble className="h-4 w-4 mr-2 text-muted-foreground shrink-0" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BED_SIZE_FILTER_TIERS.map((tier) => (
+                    <SelectItem key={tier.minBedWidthCm} value={String(tier.minBedWidthCm)}>
+                      {tier.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {allListings.map((listing) => (
-              <div
-                key={listing.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors"
-              >
-                <div className="space-y-1 mb-2 sm:mb-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">{listing.title}</p>
-                    <Badge variant="outline" className="text-xs">
-                      {listing.platform}
-                    </Badge>
+            {filteredListings.length === 0 && (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                No listings match this bed-size filter. Try a lower minimum.
+              </p>
+            )}
+            {filteredListings.map((listing) => {
+              const warnings = bedWarnings(listing.beds, travelers);
+              return (
+                <div
+                  key={listing.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors"
+                >
+                  <div className="space-y-1 mb-2 sm:mb-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{listing.title}</p>
+                      <Badge variant="outline" className="text-xs">
+                        {listing.platform}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                      <span>{listing.bedrooms} bed{listing.bedrooms > 1 ? "s" : ""}</span>
+                      <span>{listing.bathrooms} bath{listing.bathrooms > 1 ? "s" : ""}</span>
+                      <span>Up to {listing.maxGuests} guests</span>
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {listing.neighborhood}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <BedDouble className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>
+                        {describeBeds(listing.beds)}
+                        {listing.bedsEstimated ? " (estimated)" : ""}
+                      </span>
+                    </div>
+                    {warnings.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {warnings.map((warning) => (
+                          <Badge key={warning} variant="warning" className="text-xs font-normal">
+                            {warning}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-yellow-500">★</span>
+                      <span>{listing.reviewScore.toFixed(1)}</span>
+                      <span className="text-muted-foreground">({listing.reviewCount} reviews)</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <span>{listing.bedrooms} bed{listing.bedrooms > 1 ? "s" : ""}</span>
-                    <span>{listing.bathrooms} bath{listing.bathrooms > 1 ? "s" : ""}</span>
-                    <span>Up to {listing.maxGuests} guests</span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {listing.neighborhood}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-yellow-500">★</span>
-                    <span>{listing.reviewScore.toFixed(1)}</span>
-                    <span className="text-muted-foreground">({listing.reviewCount} reviews)</span>
+                  <div className="text-right">
+                    <p className="text-lg font-bold">{formatCurrency(listing.totalPrice, listing.currency)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatCurrency(listing.pricePerNight, listing.currency)}/night
+                    </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold">{formatCurrency(listing.totalPrice)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatCurrency(listing.pricePerNight)}/night
-                  </p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>

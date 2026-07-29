@@ -1,249 +1,109 @@
 "use client";
 
-import { useState } from "react";
-import { Plug, Plus, Trash2, RefreshCw, Check, AlertCircle, Wifi, WifiOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { AlertCircle, Check, ExternalLink, Loader2, Sparkles, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { useMCPStore } from "@/store/mcpStore";
-import { MCPClient } from "@/lib/mcp/client";
-import type { MCPConnection } from "@/types";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-function ConnectionStatus({ status }: { status: MCPConnection["status"] }) {
-  if (status === "connected") {
-    return (
-      <Badge variant="success" className="gap-1">
-        <Check className="h-3 w-3" /> Connected
-      </Badge>
-    );
-  }
-  if (status === "error") {
-    return (
-      <Badge variant="warning" className="gap-1">
-        <AlertCircle className="h-3 w-3" /> Error
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline" className="gap-1">
-      <WifiOff className="h-3 w-3" /> Disconnected
-    </Badge>
-  );
-}
+type ProviderId = "liteapi" | "simulated";
 
-function ConnectorCard({ connection }: { connection: MCPConnection }) {
-  const { setConnectionStatus, removeConnection } = useMCPStore();
-  const [testing, setTesting] = useState(false);
+export default function DataSourcePage() {
+  const [provider, setProvider] = useState<ProviderId | null>(null);
 
-  const testConnection = async () => {
-    setTesting(true);
-    setConnectionStatus(connection.id, "disconnected");
-    try {
-      const client = new MCPClient(connection);
-      const isConnected = await client.testConnection();
-      setConnectionStatus(connection.id, isConnected ? "connected" : "error");
-    } catch {
-      setConnectionStatus(connection.id, "error");
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between space-y-0">
-        <div className="space-y-1">
-          <CardTitle className="text-lg flex items-center gap-2">
-            {connection.type === "rentals" ? "🏠" : connection.type === "hotels" ? "🏨" : "🔌"}
-            {connection.name}
-          </CardTitle>
-          <CardDescription>{connection.description}</CardDescription>
-        </div>
-        <ConnectionStatus status={connection.status} />
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm">
-            <Wifi className="h-4 w-4 text-muted-foreground" />
-            <code className="text-xs bg-muted px-2 py-1 rounded">{connection.url}</code>
-          </div>
-          {connection.requiresKey && (
-            <Badge variant="warning" className="text-xs">
-              API Key Required
-            </Badge>
-          )}
-          <div className="flex gap-2 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={testConnection}
-              disabled={testing}
-              className="gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${testing ? "animate-spin" : ""}`} />
-              {testing ? "Testing..." : "Test Connection"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => removeConnection(connection.id)}
-              className="gap-2 text-destructive hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-              Remove
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function ConnectionsPage() {
-  const { connections, addConnection } = useMCPStore();
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newConn, setNewConn] = useState({
-    name: "",
-    url: "",
-    type: "custom" as MCPConnection["type"],
-    requiresKey: false,
-    description: "",
-  });
-
-  const handleAdd = () => {
-    if (!newConn.name || !newConn.url) return;
-    addConnection({
-      name: newConn.name,
-      url: newConn.url,
-      type: newConn.type,
-      requiresKey: newConn.requiresKey,
-      description: newConn.description || `Custom ${newConn.type} connector`,
-    });
-    setNewConn({ name: "", url: "", type: "custom", requiresKey: false, description: "" });
-    setShowAddForm(false);
-  };
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/data-source")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setProvider(data.provider ?? "simulated");
+      })
+      .catch(() => {
+        if (!cancelled) setProvider("simulated");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="container py-8">
-      <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Data Connections</h1>
-            <p className="text-muted-foreground mt-1">
-              Preview and test MCP connector settings for a future live-data integration.
-            </p>
-          </div>
-          <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Connector
-          </Button>
+      <div className="flex flex-col gap-6 max-w-2xl mx-auto">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Data Source</h1>
+          <p className="text-muted-foreground mt-1">
+            Where BeatBooker&apos;s rental and hotel listings actually come from.
+          </p>
         </div>
 
-        {/* Add Connector Form */}
-        {showAddForm && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Add Custom MCP Connector</CardTitle>
-              <CardDescription>
-                Enter the URL of any MCP-compatible server. Optionally provide an API key if required.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="conn-name">Connector Name</Label>
-                  <Input
-                    id="conn-name"
-                    placeholder="e.g., AirROI, SerpApi"
-                    value={newConn.name}
-                    onChange={(e) => setNewConn({ ...newConn, name: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="conn-url">MCP URL</Label>
-                  <Input
-                    id="conn-url"
-                    placeholder="https://mcp.example.com/mcp"
-                    value={newConn.url}
-                    onChange={(e) => setNewConn({ ...newConn, url: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="conn-type">Type</Label>
-                  <select
-                    id="conn-type"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={newConn.type}
-                    onChange={(e) =>
-                      setNewConn({ ...newConn, type: e.target.value as MCPConnection["type"] })
-                    }
-                  >
-                    <option value="rentals">Rentals</option>
-                    <option value="hotels">Hotels</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="conn-desc">Description (optional)</Label>
-                  <Input
-                    id="conn-desc"
-                    placeholder="What does this connector provide?"
-                    value={newConn.description}
-                    onChange={(e) => setNewConn({ ...newConn, description: e.target.value })}
-                  />
-                </div>
-                <div className="flex gap-2 justify-end pt-2">
-                  <Button variant="outline" onClick={() => setShowAddForm(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleAdd}>Add Connector</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              {provider === null ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : provider === "liteapi" ? (
+                <Check className="h-5 w-5 text-green-600 dark:text-green-400" />
+              ) : (
+                <WifiOff className="h-5 w-5 text-muted-foreground" />
+              )}
+              Current provider
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {provider === null && <p className="text-sm text-muted-foreground">Checking...</p>}
+            {provider === "liteapi" && (
+              <>
+                <Badge variant="success" className="gap-1">
+                  <Check className="h-3 w-3" /> Live data (LiteAPI)
+                </Badge>
+                <p className="text-sm text-muted-foreground">
+                  Search results are real hotel and apartment inventory from LiteAPI/Nuitee.
+                  Bed configurations from this source are inferred from room names and marked
+                  &ldquo;estimated&rdquo; where shown, since bed dimensions aren&apos;t always a
+                  structured field in the underlying data.
+                </p>
+              </>
+            )}
+            {provider === "simulated" && (
+              <>
+                <Badge variant="outline" className="gap-1">
+                  <Sparkles className="h-3 w-3" /> Simulated demo data
+                </Badge>
+                <p className="text-sm text-muted-foreground">
+                  No <code className="text-xs bg-muted px-1 py-0.5 rounded">LITEAPI_KEY</code> is
+                  configured, so BeatBooker generates realistic worldwide listings — real
+                  coordinates and currency for your searched destination, with exact
+                  (not estimated) bed dimensions — instead of querying a live source.
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* API Keys Info */}
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="pt-6">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-primary mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium mb-1">API Key Information</p>
+              <AlertCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+              <div className="text-sm space-y-2">
+                <p className="font-medium">Switch to live data</p>
                 <p className="text-muted-foreground">
-                  The default OpenBnB and Gondola entries do not include API keys. Availability
-                  depends on the configured server endpoint.
+                  Get a free LiteAPI sandbox key (no credit card required), add it to{" "}
+                  <code className="text-xs bg-muted px-1 py-0.5 rounded">.env.local</code> as{" "}
+                  <code className="text-xs bg-muted px-1 py-0.5 rounded">LITEAPI_KEY=...</code>,
+                  and restart the app.
                 </p>
-                <p className="text-muted-foreground mt-1">
-                  <strong>Optional Paid Upgrades:</strong> AirROI (demand data), SerpApi or
-                  Makcorps (hotel cross-site pricing). Get API keys from their respective websites.
-                </p>
+                <a
+                  href="https://dashboard.liteapi.travel"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                >
+                  Get a free LiteAPI sandbox key
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        <Separator />
-
-        {/* Connectors List */}
-        <div className="grid gap-4">
-          {connections.map((conn) => (
-            <ConnectorCard key={conn.id} connection={conn} />
-          ))}
-        </div>
-
-        {connections.length === 0 && (
-          <div className="text-center py-12">
-            <Plug className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium">No Connectors Configured</h3>
-            <p className="text-muted-foreground mt-1">
-              Add the default OpenBnB and Gondola connectors to get started.
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

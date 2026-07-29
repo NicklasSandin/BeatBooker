@@ -7,6 +7,7 @@
 
 import type { Trip, RentalListing, HotelOption, OrganicPick } from "@/types";
 import { formatCurrency } from "@/lib/utils";
+import { describeBeds } from "@/lib/beds";
 
 /**
  * Export trip data as a downloadable Markdown file
@@ -48,33 +49,34 @@ export function generateTripMarkdown(trip: Trip): string {
     lines.push(``);
 
     const { cheapestWeek, priceRange, bestNeighborhoods } = trip.rentals;
+    const rentalCurrency = trip.rentals.allListings[0]?.currency ?? "USD";
 
     lines.push(`### Lowest-Cost Stay`);
-    lines.push(`- **Total:** ${formatCurrency(cheapestWeek.totalPrice)}`);
-    lines.push(`- **Avg/Night:** ${formatCurrency(cheapestWeek.avgPricePerNight)}`);
+    lines.push(`- **Total:** ${formatCurrency(cheapestWeek.totalPrice, rentalCurrency)}`);
+    lines.push(`- **Avg/Night:** ${formatCurrency(cheapestWeek.avgPricePerNight, rentalCurrency)}`);
     lines.push(`- **Dates:** ${cheapestWeek.startDate} to ${cheapestWeek.endDate}`);
     lines.push(``);
 
     lines.push(`### Price Range`);
-    lines.push(`- **Min/Night:** ${formatCurrency(priceRange.min)}`);
-    lines.push(`- **Max/Night:** ${formatCurrency(priceRange.max)}`);
-    lines.push(`- **Avg/Night:** ${formatCurrency(priceRange.avg)}`);
+    lines.push(`- **Min/Night:** ${formatCurrency(priceRange.min, rentalCurrency)}`);
+    lines.push(`- **Max/Night:** ${formatCurrency(priceRange.max, rentalCurrency)}`);
+    lines.push(`- **Avg/Night:** ${formatCurrency(priceRange.avg, rentalCurrency)}`);
     lines.push(``);
 
     lines.push(`### Best Neighborhoods`);
     lines.push(`| Neighborhood | Avg Price/Night | Listings |`);
     lines.push(`|---|---|---|`);
     bestNeighborhoods.forEach((n) => {
-      lines.push(`| ${n.name} | ${formatCurrency(n.avgPrice)} | ${n.listingCount} |`);
+      lines.push(`| ${n.name} | ${formatCurrency(n.avgPrice, rentalCurrency)} | ${n.listingCount} |`);
     });
     lines.push(``);
 
     lines.push(`### Top Listings`);
-    lines.push(`| Title | Neighborhood | Price/Night | Score |`);
-    lines.push(`|---|---|---|---|`);
+    lines.push(`| Title | Neighborhood | Price/Night | Beds | Score |`);
+    lines.push(`|---|---|---|---|---|`);
     cheapestWeek.listings.forEach((l: RentalListing) => {
       lines.push(
-        `| ${l.title} | ${l.neighborhood} | ${formatCurrency(l.pricePerNight)} | ${l.reviewScore}/5 |`
+        `| ${l.title} | ${l.neighborhood} | ${formatCurrency(l.pricePerNight, l.currency)} | ${describeBeds(l.beds)} | ${l.reviewScore}/5 |`
       );
     });
     lines.push(``);
@@ -85,18 +87,20 @@ export function generateTripMarkdown(trip: Trip): string {
     lines.push(`## 🏨 Hotels Analysis`);
     lines.push(``);
 
+    const hotelCurrency = trip.hotels.hotels[0]?.prices[0]?.currency ?? "USD";
+
     lines.push(`### Price Comparison`);
-    lines.push(`| Hotel | Cheapest Platform | Price | Savings |`);
-    lines.push(`|---|---|---|---|`);
+    lines.push(`| Hotel | Cheapest Platform | Price | Beds | Savings |`);
+    lines.push(`|---|---|---|---|---|`);
     trip.hotels.hotels.forEach((h: HotelOption) => {
       lines.push(
-        `| ${h.name} | ${h.cheapestPlatform} | ${formatCurrency(h.cheapestPrice)} | ${formatCurrency(h.savings)} |`
+        `| ${h.name} | ${h.cheapestPlatform} | ${formatCurrency(h.cheapestPrice, hotelCurrency)} | ${describeBeds(h.beds)} | ${formatCurrency(h.savings, hotelCurrency)} |`
       );
     });
     lines.push(``);
 
     lines.push(`### Summary`);
-    lines.push(`- **Total Potential Savings:** ${formatCurrency(trip.hotels.summary.totalSavings)}`);
+    lines.push(`- **Total Potential Savings:** ${formatCurrency(trip.hotels.summary.totalSavings, hotelCurrency)}`);
     lines.push(`- **Best Platform Overall:** ${trip.hotels.summary.bestPlatform}`);
     lines.push(``);
   }
@@ -111,8 +115,8 @@ export function generateTripMarkdown(trip: Trip): string {
       lines.push(`**${i + 1}. ${pick.title}**`);
       lines.push(`- **Type:** ${pick.type === "rental" ? "🏠 Rental" : "🏨 Hotel"}`);
       lines.push(`- **Platform:** ${pick.platform}`);
-      lines.push(`- **Total Price:** ${formatCurrency(pick.price)}`);
-      lines.push(`- **Price/Night:** ${formatCurrency(pick.pricePerNight)}`);
+      lines.push(`- **Total Price:** ${formatCurrency(pick.price, pick.currency)}`);
+      lines.push(`- **Price/Night:** ${formatCurrency(pick.pricePerNight, pick.currency)}`);
       lines.push(`- **Score:** ${pick.score.toFixed(2)} (review/price ratio)`);
       lines.push(`- **Review Score:** ${pick.reviewScore}/5 (${pick.reviewCount} reviews)`);
       lines.push(`- **Direct Booking:** ${pick.directBookingUrl}`);
@@ -123,7 +127,7 @@ export function generateTripMarkdown(trip: Trip): string {
     lines.push(`| Type | Title | Platform | Price |`);
     lines.push(`|---|---|---|---|`);
     trip.thePick.sponsoredComparison.forEach((s) => {
-      lines.push(`| Sponsored | ${s.title} | ${s.platform} | ${formatCurrency(s.price)} |`);
+      lines.push(`| Sponsored | ${s.title} | ${s.platform} | ${formatCurrency(s.price, s.currency)} |`);
     });
     lines.push(``);
   }

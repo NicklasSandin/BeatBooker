@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Music, PlusCircle, History, Plug, Menu } from "lucide-react";
+import { Music, PlusCircle, History, Database, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,7 @@ const navLinks = [
   { href: "/", label: "Home", icon: Music },
   { href: "/trip/new", label: "New Trip", icon: PlusCircle },
   { href: "/history", label: "History", icon: History },
-  { href: "/connections", label: "Connections", icon: Plug },
+  { href: "/connections", label: "Data Source", icon: Database },
 ];
 
 export function Header() {
